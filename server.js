@@ -17,10 +17,23 @@ app.use((req, res, next) => {
     next();
   });
 
-app.get('/', async (req, res) => {
-    const [questions] = await db.execute('SELECT * FROM questions ORDER BY created_at DESC');
-    res.render('index', { title: 'Stackit - Home', questions });
-});
+  app.get('/', async (req, res) => {
+    const [questions] = await db.execute(`
+      SELECT 
+        q.*, 
+        COALESCE(SUM(CASE v.vote_type 
+          WHEN 'up' THEN 1 
+          WHEN 'down' THEN -1 
+          ELSE 0 END), 0) AS vote_count
+      FROM questions q
+      LEFT JOIN question_votes v ON q.id = v.question_id
+      GROUP BY q.id
+      ORDER BY q.created_at DESC
+    `);
+  
+    res.render('index', { title: 'Stackit - Home', questions, user: req.user });
+  });
+  
 
 app.get('/ask', (req, res) => {
     res.render('ask', { title: 'Ask a Question' });
@@ -54,6 +67,18 @@ app.get('/question/:id', async (req, res) => {
       return res.status(404).render('404', { message: 'Question not found' });
     }
     const question = qResult[0];
+
+    const [[{ vote_count }]] = await db.execute(`
+        SELECT COALESCE(SUM(CASE vote_type 
+          WHEN 'up' THEN 1 
+          WHEN 'down' THEN -1 
+          ELSE 0 END), 0) AS vote_count
+        FROM question_votes
+        WHERE question_id = ?
+      `, [id]);
+    
+      question.vote_count = vote_count;
+
     const [answers] = await db.execute(`
       SELECT 
         a.*, 
@@ -157,6 +182,54 @@ app.get('/question/:id', async (req, res) => {
   
     res.json({ success: true, acceptedId: id });
   });
+
+  app.post('/question/:id/vote', requireLogin, express.json(), async (req, res) => {
+    const { id } = req.params;
+    const { type } = req.body;
+    const user = req.user.username;
+  
+    try {
+      const [[existing]] = await db.execute(
+        'SELECT vote_type FROM question_votes WHERE user = ? AND question_id = ?',
+        [user, id]
+      );
+  
+      let voteChange = 0;
+  
+      if (!existing) {
+        voteChange = type === 'up' ? 1 : -1;
+        await db.execute(
+          'INSERT INTO question_votes (user, question_id, vote_type) VALUES (?, ?, ?)',
+          [user, id, type]
+        );
+      } else if (existing.vote_type === type) {
+        return res.json({ success: true, newVotes: null }); 
+      } else {
+        voteChange = type === 'up' ? 2 : -2;
+        await db.execute(
+          'UPDATE question_votes SET vote_type = ? WHERE user = ? AND question_id = ?',
+          [type, user, id]
+        );
+      }
+  
+      const [[{ vote_count }]] = await db.execute(`
+        SELECT 
+          COALESCE(SUM(CASE vote_type 
+            WHEN 'up' THEN 1 
+            WHEN 'down' THEN -1 
+            ELSE 0 END), 0) AS vote_count
+        FROM question_votes
+        WHERE question_id = ?
+      `, [id]);
+  
+      res.json({ success: true, newVotes: vote_count });
+  
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false });
+    }
+  });
+  
   
   
 

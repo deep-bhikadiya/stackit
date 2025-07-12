@@ -3,22 +3,49 @@
 <h1>Questions</h1>
 
 <div class="question-list">
-    <% questions.forEach(q => { %>
-        <div class="question-item">
-          <a href="/question/<%= q.id %>" class="question-title"><%= q.title %></a>
-          
-          <div class="question-meta">
-            <div class="tag-list">
-              <% q.tags.split(',').forEach(tag => { %>
-                <span class="tag"><%= tag.trim() %></span>
-              <% }) %>
-            </div>
-            <div class="asked-by">
-              Asked by <span class="username"><%= q.user %></span>
-            </div>
-          </div>
+  <% questions.forEach(q => { %>
+    <div class="question-item" data-question-id="<%= q.id %>">
+
+      <div class="question-votes">
+        <button class="q-vote-btn" data-id="<%= q.id %>" data-type="up">🔼</button>
+        <span class="q-vote-count" id="q-vote-<%= q.id %>"><%= q.vote_count || 0 %></span>
+        <button class="q-vote-btn" data-id="<%= q.id %>" data-type="down">🔽</button>
+      </div>
+
+      <a href="/question/<%= q.id %>" class="question-title"><%= q.title %></a>
+      
+      <div class="question-meta">
+        <div class="tag-list">
+          <% q.tags.split(',').forEach(tag => { %>
+            <span class="tag"><%= tag.trim() %></span>
+          <% }) %>
         </div>
-      <% }) %>         
+        <div class="asked-by">
+          Asked by <span class="username"><%= q.user %></span>
+        </div>
+      </div>
+    </div>
+  <% }) %>         
 </div>
+<script>
+    document.querySelectorAll('.q-vote-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const type = btn.dataset.type;
+  
+        const res = await fetch(`/question/${id}/vote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type })
+        });
+  
+        const data = await res.json();
+        if (data.success && data.newVotes !== null) {
+          document.getElementById(`q-vote-${id}`).textContent = data.newVotes;
+        }
+      });
+    });
+  </script>
+  
 
 <%- include('footer') %>

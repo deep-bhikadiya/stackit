@@ -3,6 +3,14 @@
 <h1><%= question.title %></h1>
 
 <div class="question-body">
+    <div class="question-header">
+        <div class="question-votes">
+          <button class="q-vote-btn" data-id="<%= question.id %>" data-type="up">🔼</button>
+          <span class="q-vote-count" id="q-vote-<%= question.id %>"><%= question.vote_count || 0 %></span>
+          <button class="q-vote-btn" data-id="<%= question.id %>" data-type="down">🔽</button>
+        </div>
+        <h2 class="question-title"><%= question.title %></h2>
+    </div>      
   <div><%- question.description %></div>
   <p>Asked by: <span class="username"><%= question.user %></span></p>
   <p>
@@ -83,6 +91,24 @@
     document.getElementById('answer').value = quill.root.innerHTML;
   });
 
+  document.querySelectorAll('.q-vote-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const type = btn.dataset.type;
+
+      const res = await fetch(`/question/${id}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+
+      const data = await res.json();
+      if (data.success && data.newVotes !== null) {
+        document.getElementById(`q-vote-${id}`).textContent = data.newVotes;
+      }
+    });
+  });
+  
   document.querySelectorAll('.vote-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
