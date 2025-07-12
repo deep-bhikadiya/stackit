@@ -1,0 +1,24 @@
+<%- include('header') %>
+
+<h1>Questions</h1>
+
+<div class="question-list">
+    <% questions.forEach(q => { %>
+        <div class="question-item">
+          <a href="/question/<%= q.id %>" class="question-title"><%= q.title %></a>
+          
+          <div class="question-meta">
+            <div class="tag-list">
+              <% q.tags.split(',').forEach(tag => { %>
+                <span class="tag"><%= tag.trim() %></span>
+              <% }) %>
+            </div>
+            <div class="asked-by">
+              Asked by <span class="username"><%= q.user %></span>
+            </div>
+          </div>
+        </div>
+      <% }) %>         
+</div>
+
+<%- include('footer') %>
