@@ -2,6 +2,18 @@
 
 <h1>Questions</h1>
 
+<form action="/" method="GET" class="question-filter">
+    <select name="filter">
+      <option value="newest" <%= filter === 'newest' ? 'selected' : '' %>>Newest</option>
+      <option value="unanswered" <%= filter === 'unanswered' ? 'selected' : '' %>>Unanswered</option>
+    </select>
+  
+    <input type="text" name="tag" placeholder="Filter by tag" value="<%= tag || '' %>">
+  
+    <button type="submit">Apply</button>
+  </form>
+  
+  
 <div class="question-list">
   <% questions.forEach(q => { %>
     <div class="question-item" data-question-id="<%= q.id %>">
@@ -16,9 +28,11 @@
       
       <div class="question-meta">
         <div class="tag-list">
-          <% q.tags.split(',').forEach(tag => { %>
-            <span class="tag"><%= tag.trim() %></span>
-          <% }) %>
+            <div class="tag-list">
+                <% q.tags.split(',').forEach(tag => { %>
+                  <a href="/?tag=<%= tag.trim() %>" class="tag"><%= tag.trim() %></a>
+                <% }) %>
+              </div>
         </div>
         <div class="asked-by">
           Asked by <span class="username"><%= q.user %></span>
@@ -38,7 +52,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type })
         });
-  
+        
+        if (res.redirected) {
+            window.location.href = res.url;
+            return;
+        }
+
         const data = await res.json();
         if (data.success && data.newVotes !== null) {
           document.getElementById(`q-vote-${id}`).textContent = data.newVotes;

@@ -7,18 +7,26 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <header class="navbar">
-    <div class="logo">Stackit</div>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/ask">Ask Question</a>
-    </nav>
-  </header>
+    <header class="navbar">
+        <div class="logo">Stackit</div>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/ask">Ask Question</a>
+      
+          <% if (user) { %>
+            <div class="user-info">
+              <img src="<%= user.profile_image || '/images/default-avatar.png' %>" class="avatar">
+              <span class="username-header"><%= user.username %></span>
+              <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+          <% } else { %>
+            <a href="/login">Login</a>
+            <a href="/signup">Sign Up</a>
+          <% } %>
+          
+        </nav>
+      </header>
+      
+      
   <div class="container">
-    <aside class="sidebar">
-      <ul>
-        <li><a href="/">Questions</a></li>
-        <li><a href="/tags">Tags</a></li>
-      </ul>
-    </aside>
     <main class="content">

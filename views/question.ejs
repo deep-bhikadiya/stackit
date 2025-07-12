@@ -121,6 +121,11 @@
           body: JSON.stringify({ type })
         });
 
+        if (res.redirected) {
+            window.location.href = res.url;
+            return;
+        }
+
         const data = await res.json();
         if (data.success && typeof data.newVotes !== 'undefined' && data.newVotes !== null) {
           const countSpan = document.getElementById(`vote-${id}`);
@@ -145,6 +150,10 @@
         }
       });
 
+      if (res.redirected) {
+            window.location.href = res.url;
+            return;
+        }
       const data = await res.json();
       if (data.success) {
         document.querySelectorAll('.accepted-badge').forEach(el => el.remove());

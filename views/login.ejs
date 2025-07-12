@@ -1,0 +1,23 @@
+<%- include('header') %>
+
+<div class="auth-container">
+  <h2>Login to Stackit</h2>
+
+  <% if (typeof error !== 'undefined') { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <form action="/login" method="POST" class="auth-form">
+    <label for="username">Username</label>
+    <input type="text" name="username" required>
+
+    <label for="password">Password</label>
+    <input type="password" name="password" required>
+
+    <button type="submit">Login</button>
+
+    <p>Don't have an account? <a href="/signup">Sign up</a></p>
+  </form>
+</div>
+
+<%- include('footer') %>

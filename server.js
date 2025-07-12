@@ -3,46 +3,155 @@ const db = require('./db');
 const requireLogin = require('./authMiddleware');
 const app = express();
 const PORT = 3000;
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
+const uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'public/uploads'),
+    filename: (req, file, cb) => {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = path.extname(file.originalname);
+        cb(null, unique + ext);
+    }
+    });
+
+    const upload = multer({ storage });
+
+
+app.use(session({
+  secret: ']MP<;qz](fk2*bb',
+  resave: false,
+  saveUninitialized: false,
+}));
+
+app.use((req, res, next) => {
+    res.locals.user = req.session.user || null;
+    next();
+  });
+
+  
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 
-
-app.use((req, res, next) => {
-    req.user = {
-      id: 'u123',
-      username: 'demo_user'
-    };
-    next();
+  app.get('/signup', (req, res) => {
+    res.render('signup', { title: 'Sign Up' });
   });
 
-  app.get('/', async (req, res) => {
-    const [questions] = await db.execute(`
-      SELECT 
-        q.*, 
-        COALESCE(SUM(CASE v.vote_type 
-          WHEN 'up' THEN 1 
-          WHEN 'down' THEN -1 
-          ELSE 0 END), 0) AS vote_count
-      FROM questions q
-      LEFT JOIN question_votes v ON q.id = v.question_id
-      GROUP BY q.id
-      ORDER BY q.created_at DESC
-    `);
+  app.post('/signup', upload.single('profile'), async (req, res) => {
+    const { username, email, password } = req.body;
   
-    res.render('index', { title: 'Stackit - Home', questions, user: req.user });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const profileImage = req.file ? `/uploads/${req.file.filename}` : null;
+  
+    try {
+      await db.execute(`
+        INSERT INTO users (username, email, password_hash, profile_image)
+        VALUES (?, ?, ?, ?)
+      `, [username, email, hashedPassword, profileImage]);
+  
+      res.redirect('/login');
+    } catch (err) {
+      console.error(err);
+      res.render('signup', { title: 'Sign Up', error: 'Username or email already exists' });
+    }
   });
   
 
-app.get('/ask', (req, res) => {
-    res.render('ask', { title: 'Ask a Question' });
-});
+    app.get('/login', (req, res) => {
+        res.render('login', { title: 'Login' });
+    });
+      
+    app.post('/login', async (req, res) => {
+        const { username, password } = req.body;
+      
+        const [[user]] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+      
+        if (!user) {
+          return res.render('login', { title: 'Login', error: 'Invalid username or password' });
+        }
+      
+        const valid = await bcrypt.compare(password, user.password_hash);
+        if (!valid) {
+          return res.render('login', { title: 'Login', error: 'Invalid username or password' });
+        }
+      
+        req.session.user = {
+          id: user.id,
+          username: user.username,
+          profile_image: user.profile_image
+        };
+      
+        res.redirect('/');
+    });
+
+    app.get('/logout', (req, res) => {
+        req.session.destroy(() => {
+          res.redirect('/');
+        });
+    });
+      
+      
+
+    app.get('/', async (req, res) => {
+        const { filter, tag } = req.query;
+        const params = [];
+        let query = `
+          SELECT 
+            q.*, 
+            COALESCE(SUM(CASE v.vote_type 
+              WHEN 'up' THEN 1 
+              WHEN 'down' THEN -1 
+              ELSE 0 END), 0) AS vote_count
+          FROM questions q
+          LEFT JOIN question_votes v ON q.id = v.question_id
+        `;
+      
+        if (filter === 'unanswered') {
+          query += `
+            LEFT JOIN answers a ON q.id = a.question_id
+            GROUP BY q.id
+            HAVING COUNT(a.id) = 0
+          `;
+        } else {
+          query += ` GROUP BY q.id`;
+        }
+      
+        if (tag) {
+            query = `SELECT * FROM (${query}) AS filtered WHERE FIND_IN_SET(?, filtered.tags) ORDER BY filtered.created_at DESC`;
+            params.push(tag);
+        } else if (filter !== 'unanswered') {
+            query += ` ORDER BY q.created_at DESC`;
+        }
+      
+        const [questions] = await db.execute(query, params);
+      
+        res.render('index', {
+          title: 'Stackit - Home',
+          questions,
+          user: req.session.user,
+          filter: filter || 'newest',
+          tag
+        });
+      });
+      
+  
+
+  app.get('/ask', requireLogin, (req, res) => {
+    res.render('ask', { title: 'Ask Question', user: req.session.user });
+  });
+  
 
 app.post('/ask', requireLogin, async (req, res) => {
 const { title, description, tags } = req.body;
 
-const user = req.user.username;
+const user = req.session.user.username;
 
   try {
     await db.execute(
@@ -93,14 +202,14 @@ app.get('/question/:id', async (req, res) => {
       ORDER BY a.created_at ASC
     `, [id]);
   
-    res.render('question', {title: question.title, question, answers, user: req.user });
+    res.render('question', {title: question.title, question, answers, user: req.session.user });
   });
   
   
 
   app.post('/question/:id/answer', requireLogin,  async (req, res) => {  
     const { answer } = req.body;
-    const user = req.user.username;
+    const user = req.session.user.username;
   
     await db.execute(
       'INSERT INTO answers (question_id, content, user) VALUES (?, ?, ?)',
@@ -113,7 +222,7 @@ app.get('/question/:id', async (req, res) => {
   app.post('/answer/:id/vote', requireLogin, express.json(), async (req, res) => {
     const { id } = req.params;
     const { type } = req.body;
-    const user = req.user.username;
+    const user = req.session.user.username;
   
     try {
       
@@ -173,7 +282,7 @@ app.get('/question/:id', async (req, res) => {
       WHERE a.id = ?
     `, [id]);
   
-    if (!answer || answer.user !== req.user.username) {
+    if (!answer || answer.user !== req.session.user.username) {
       return res.status(403).json({ success: false, message: 'Not allowed' });
     }
   
@@ -186,7 +295,7 @@ app.get('/question/:id', async (req, res) => {
   app.post('/question/:id/vote', requireLogin, express.json(), async (req, res) => {
     const { id } = req.params;
     const { type } = req.body;
-    const user = req.user.username;
+    const user = req.session.user.username;
   
     try {
       const [[existing]] = await db.execute(

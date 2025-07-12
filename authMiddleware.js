@@ -1,9 +1,9 @@
 function requireLogin(req, res, next) {
-    if (!req.user) {
-      return res.status(403).send('You must be logged in to perform this action');
-    }
-    next();
+  if (!req.session.user) {
+    return res.redirect('/login');
   }
-  
-  module.exports = requireLogin;
+  next();
+}
+
+module.exports = requireLogin;
   
