@@ -20,13 +20,29 @@
 <% if (answers.length === 0) { %>
   <p>No answers yet.</p>
 <% } else { %>
-  <% answers.forEach(a => { %>
-    <div class="answer">
-      <div><%- a.content %></div>
-      <p><em>Answered by <span class="username"><%= a.user %></span> on <%= new Date(a.created_at).toLocaleString() %></em></p>
-    </div>
-    <hr>
-  <% }) %>
+    <% answers.forEach(a => { %>
+        <div class="answer" data-answer-id="<%= a.id %>">
+      
+            <div class="answer-header">
+                <div class="answer-votes">
+                  <button class="vote-btn" data-id="<%= a.id %>" data-type="up">🔼</button>
+                  <span class="vote-count" id="vote-<%= a.id %>"><%= a.vote_count %></span>
+                  <button class="vote-btn" data-id="<%= a.id %>" data-type="down">🔽</button>
+                </div>
+              
+                <% if (a.is_accepted) { %>
+                  <div class="accepted-badge">✔ Accepted Answer</div>
+                <% } else if (user && user.username === question.user) { %>
+                  <button class="accept-btn" data-id="<%= a.id %>">✔ Mark as Accepted</button>
+                <% } %>
+            </div>
+                       
+      
+          <div><%- a.content %></div>
+          <p><em>Answered by <span class="username"><%= a.user %></span> on <%= new Date(a.created_at).toLocaleString() %></em></p>
+      
+        </div>
+      <% }) %>           
 <% } %>
 
 <% if (user) { %>
@@ -66,6 +82,82 @@
   document.getElementById('answer-form')?.addEventListener('submit', function () {
     document.getElementById('answer').value = quill.root.innerHTML;
   });
+
+  document.querySelectorAll('.vote-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const type = btn.dataset.type;
+
+      try {
+        const res = await fetch(`/answer/${id}/vote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type })
+        });
+
+        const data = await res.json();
+        if (data.success && typeof data.newVotes !== 'undefined' && data.newVotes !== null) {
+          const countSpan = document.getElementById(`vote-${id}`);
+          countSpan.textContent = data.newVotes;
+        } else {
+          console.log('voting failed')
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  });
+
+  document.querySelectorAll('.accept-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const answerId = btn.dataset.id;
+
+      const res = await fetch(`/answer/${answerId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        document.querySelectorAll('.accepted-badge').forEach(el => el.remove());
+
+        const username = document.body.dataset.username;
+        const owner = document.body.dataset.owner;
+
+        if (username === owner) {
+        document.querySelectorAll('.answer').forEach(answerEl => {
+            const answerId = answerEl.dataset.answerId;
+            if (answerId !== data.acceptedId) {
+            if (!answerEl.querySelector('.accept-btn')) {
+                const header = answerEl.querySelector('.answer-header');
+                const newBtn = document.createElement('button');
+                newBtn.className = 'accept-btn';
+                newBtn.textContent = '✔ Mark as Accepted';
+                newBtn.dataset.id = answerId;
+                header.appendChild(newBtn);
+            }
+            }
+        });
+        }
+
+        const acceptedAnswer = document.querySelector(`[data-answer-id="${data.acceptedId}"]`);
+        if (!acceptedAnswer) return;
+
+        const btn = acceptedAnswer.querySelector('.accept-btn');
+        if (btn) btn.remove();
+
+        const header = acceptedAnswer.querySelector('.answer-header');
+        const badge = document.createElement('div');
+        badge.className = 'accepted-badge';
+        badge.textContent = '✔ Accepted Answer';
+        header.appendChild(badge);
+
+      }
+    });
+  });
+
 </script>
 
 <%- include('footer') %>
